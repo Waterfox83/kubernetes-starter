@@ -1,4 +1,8 @@
-# kubernetes-starter
+# Tenant service
+The tenant service is reponsible for handling organization and tenant data
+
+## Ownership
+This project is currently owned by [Team Modak](mailto:TeamModak@jda.com).
 
 ## Build
  Run `./gradlew clean check`
@@ -21,13 +25,11 @@
  Run `docker run -p 8080:8080 waterfox83/kubernetes-starter`
  
 
-## Deploying to Kubernetes Cluster
+## Deploying to Azure Kubernetes Cluster
 
-For running on AKS, we should create and push the image to ACR. Here we are pushing it to docker hub.
-
-We need to create the image first though, run `./gradlew jibBuildTar` and `docker load --input build/jib-image.tar` 
-to create and load the image. 
+For running on AKS, we should create and push the image to ACR. We need to create the image
+first though, run `./gradlew jibBuildTar` and `docker load --input build/jib-image.tar` to create and load the image. 
  
-Push it to docker hub: `docker push waterfox83/kubernetes-starter:latest`
+Push it to ACR: `docker push waterfox83/kubernetes-starter:latest`
 
 Deploy the image on Kubernetes: `kubectl apply -f deploy/starter-httpdeploy.yaml`
