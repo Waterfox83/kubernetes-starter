@@ -19,14 +19,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          env:
-            - name: EventHubsKey
-              valueFrom:
-                configMapKeyRef:
-                  name: kubernetes-starter-config
-                  key: EventHubsKey
-
 ---
+# The service (LoadBalancer type) which can be used to access the above running container.
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -41,3 +36,137 @@ spec:
     - nodePort: 30001
       port: 8080
       targetPort: 8080
+
+---
+# Deployment YAML for the PersistentVolumeClaim for the MySQL DB
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data-disk
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Deployment YAML for the Database password
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secrets
+type: Opaque
+data:
+  ROOT_PASSWORD: bXlzcWwtcGFzc3dvcmQ=
+
+---
+# Deployment YAML for the MySQL database deployment. Image used is mysql:5.7 (https://hub.docker.com/_/mysql)
+# Notice that the MYSQL_ROOT_PASSWORD is the environment variable used by the image. Here the value of this env-var
+# is being set using the Secret that we set above (name: mysql-secrets)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:5.7
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - mountPath: "/var/lib/mysql"
+              subPath: "mysql"
+              name: mysql-data
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: ROOT_PASSWORD
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-data-disk
+
+---
+# Deployment YAML for service (ClusterIP type) for MySQL. This will be used to connect to the MySQL by code or any other
+# service/container
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+spec:
+  selector:
+    app: mysql
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+
+---
+# Deployment of PhpMyAdmin for managing the DB. PMA_HOST/PMA_PORT env-vars are for MySQL Host/Port. MYSQL_ROOT_PASSWORD
+# is mandatory env-var for specifying password for root user. Notice that PMA_HOST is 'mysql-service' that we gave above
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phpmyadmin-deployment
+  labels:
+    app: phpmyadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phpmyadmin
+  template:
+    metadata:
+      labels:
+        app: phpmyadmin
+    spec:
+      containers:
+        - name: phpmyadmin
+          image: phpmyadmin/phpmyadmin
+          ports:
+            - containerPort: 80
+          env:
+            - name: PMA_HOST
+              value: mysql-service
+            - name: PMA_PORT
+              value: "3306"
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: ROOT_PASSWORD
+
+---
+
+# Service for PhpMyAdmin. So that it can be opened in a browser to access the DB
+apiVersion: v1
+kind: Service
+metadata:
+  name: phpmyadmin-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: phpmyadmin
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
